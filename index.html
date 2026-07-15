@@ -80,6 +80,11 @@
     padding: 12px 14px; margin-bottom: 8px; display: flex; gap: 12px; align-items: flex-start;
   }
   .task.done { opacity: 0.55; }
+  .task .handle { cursor: grab; color: var(--muted); font-size: 15px; padding: 2px 2px 0 0; user-select: none; line-height: 1.4; }
+  .task .handle:active { cursor: grabbing; }
+  .task.dragging { opacity: 0.35; }
+  .task.drop-above { box-shadow: 0 -3px 0 0 var(--accent); }
+  .task.drop-below { box-shadow: 0 3px 0 0 var(--accent); }
   .task.done .title { text-decoration: line-through; }
   .check {
     width: 22px; height: 22px; min-width: 22px; border-radius: 50%; border: 2px solid var(--line);
@@ -222,7 +227,7 @@ const CONFIG = {
 const COLORS = ["#2563eb","#16a34a","#d97706","#dc2626","#7c3aed","#0891b2","#db2777","#4b5563"];
 const $ = (id) => document.getElementById(id);
 
-let db, meUser = null, cats = [], tasks = [], activeCat = "all", filter = "open", selColor = COLORS[0], acctColor = COLORS[0];
+let db, meUser = null, cats = [], tasks = [], shownTasks = [], activeCat = "all", filter = "open", selColor = COLORS[0], acctColor = COLORS[0];
 
 function esc(s) { return (s || "").replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c])); }
 
@@ -282,7 +287,7 @@ function start() {
 async function load() {
   const [c, t] = await Promise.all([
     db.from("categories").select("*").order("name"),
-    db.from("tasks").select("*").order("done").order("created_at", { ascending: false }),
+    db.from("tasks").select("*").order("done").order("sort_order", { ascending: true, nullsFirst: false }).order("created_at", { ascending: false }),
   ]);
   if (c.error || t.error) { alert("Database error: " + (c.error || t.error).message); return; }
   cats = c.data; tasks = t.data;
@@ -311,11 +316,13 @@ function render() {
     (activeCat === "all" || t.category_id === activeCat) &&
     (filter === "all" || (filter === "done") === !!t.done)
   );
+  shownTasks = shown;
   if (!shown.length) { $("list").innerHTML = `<div class="empty">Nothing here. Add a task above.</div>`; return; }
   $("list").innerHTML = shown.map(t => {
     const c = cats.find(x => x.id === t.category_id);
     const overdue = t.due_date && !t.done && t.due_date < today;
-    return `<div class="task ${t.done ? "done" : ""}">
+    return `<div class="task ${t.done ? "done" : ""}" data-id="${t.id}">
+      <span class="handle" title="Drag to reorder">⠿</span>
       <button class="check" onclick="toggle('${t.id}', ${!t.done})" title="${t.done ? "Reopen" : "Complete"}">✓</button>
       <div class="body">
         <div class="title">${esc(t.title)}</div>
@@ -331,7 +338,63 @@ function render() {
       <button class="ghost" onclick="delTask('${t.id}')" title="Delete">🗑</button>
     </div>`;
   }).join("");
+  wireDrag();
 }
+
+function so(t) { return t.sort_order ?? new Date(t.created_at).getTime() / 1000; }
+
+function wireDrag() {
+  const list = $("list");
+  let dragEl = null;
+  const clearMarks = () => list.querySelectorAll(".drop-above,.drop-below").forEach(x => x.classList.remove("drop-above", "drop-below"));
+  list.querySelectorAll(".task").forEach(el => {
+    const handle = el.querySelector(".handle");
+    handle.addEventListener("mousedown", () => el.setAttribute("draggable", "true"));
+    el.addEventListener("dragstart", (e) => {
+      dragEl = el;
+      el.classList.add("dragging");
+      e.dataTransfer.effectAllowed = "move";
+      e.dataTransfer.setData("text/plain", el.dataset.id);
+    });
+    el.addEventListener("dragend", () => {
+      el.classList.remove("dragging");
+      el.removeAttribute("draggable");
+      clearMarks();
+    });
+    el.addEventListener("dragover", (e) => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = "move";
+      if (el === dragEl) return;
+      const rect = el.getBoundingClientRect();
+      const above = (e.clientY - rect.top) < rect.height / 2;
+      clearMarks();
+      el.classList.add(above ? "drop-above" : "drop-below");
+    });
+    el.addEventListener("drop", (e) => {
+      e.preventDefault();
+      const dragId = e.dataTransfer.getData("text/plain");
+      if (!dragId || dragId === el.dataset.id) return;
+      const rect = el.getBoundingClientRect();
+      const above = (e.clientY - rect.top) < rect.height / 2;
+      reorderTask(dragId, el.dataset.id, above);
+    });
+  });
+}
+
+window.reorderTask = async (dragId, targetId, above) => {
+  const list = shownTasks.filter(t => t.id !== dragId);
+  const ti = list.findIndex(t => t.id === targetId);
+  if (ti === -1) return;
+  const insertAt = above ? ti : ti + 1;
+  const prev = list[insertAt - 1], next = list[insertAt];
+  let newOrder;
+  if (!prev && !next) newOrder = 0;
+  else if (!prev) newOrder = so(next) - 1;
+  else if (!next) newOrder = so(prev) + 1;
+  else newOrder = (so(prev) + so(next)) / 2;
+  await db.from("tasks").update({ sort_order: newOrder }).eq("id", dragId);
+  load();
+};
 
 window.setCat = (id) => { activeCat = id; render(); };
 window.toggle = async (id, done) => {
@@ -372,6 +435,7 @@ async function addTask() {
     priority: $("new-pri").value,
     due_date: $("new-due").value || null,
     created_by: meUser.name,
+    sort_order: tasks.length ? Math.min(...tasks.map(so)) - 1 : 0,
   });
   $("new-title").value = ""; $("new-notes").value = ""; $("new-due").value = "";
   $("new-title").focus();
