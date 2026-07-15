@@ -128,6 +128,22 @@
   .user-row .sub { font-size: 12px; color: var(--muted); }
   .modal .divider { border-top: 1px solid var(--line); margin: 4px 0; }
   .me .udot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; vertical-align: middle; }
+  .team-panel {
+    position: fixed; top: 64px; right: 16px; width: 190px;
+    background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 12px 14px;
+  }
+  .tp-title { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); margin-bottom: 8px; }
+  .team-row { display: flex; align-items: center; gap: 8px; padding: 4px 0; font-size: 13px; }
+  .team-row .status { width: 9px; height: 9px; min-width: 9px; border-radius: 50%; }
+  .status.on { background: #16a34a; }
+  .status.idle { background: #eab308; }
+  .status.off { background: #dc2626; }
+  .team-row .who { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .team-row .you { color: var(--muted); font-size: 11px; }
+  @media (max-width: 1220px) {
+    .team-panel { position: static; width: auto; margin-bottom: 16px; }
+    .team-row { display: inline-flex; margin-right: 14px; }
+  }
   .setup { max-width: 620px; margin: 60px auto; background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 28px; }
   .setup h2 { margin-bottom: 12px; }
   .setup ol { margin: 12px 0 0 20px; line-height: 1.7; font-size: 14px; }
@@ -143,6 +159,10 @@
 </header>
 
 <main id="app" class="hidden">
+  <aside class="team-panel" id="team-panel">
+    <div class="tp-title">Team</div>
+    <div id="team-list"></div>
+  </aside>
   <div class="tabs" id="tabs"></div>
 
   <div class="add-card">
@@ -227,7 +247,10 @@ const CONFIG = {
 const COLORS = ["#2563eb","#16a34a","#d97706","#dc2626","#7c3aed","#0891b2","#db2777","#4b5563"];
 const $ = (id) => document.getElementById(id);
 
-let db, meUser = null, cats = [], tasks = [], shownTasks = [], activeCat = "all", filter = "open", selColor = COLORS[0], acctColor = COLORS[0];
+let db, meUser = null, cats = [], tasks = [], shownTasks = [], teamUsers = [], activeCat = "all", filter = "open", selColor = COLORS[0], acctColor = COLORS[0];
+let lastActivity = Date.now();
+["mousemove", "keydown", "click", "touchstart", "scroll"].forEach(ev =>
+  addEventListener(ev, () => { lastActivity = Date.now(); }, { passive: true }));
 
 function esc(s) { return (s || "").replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c])); }
 
@@ -277,11 +300,41 @@ function start() {
   $("me-name").textContent = meUser.name;
   $("me-dot").style.background = meUser.color || "#4b5563";
   load();
+  loadUsers();
+  heartbeat();
+  setInterval(heartbeat, 60000);
+  setInterval(renderTeam, 30000);
   // realtime: refresh on any change
   db.channel("board")
     .on("postgres_changes", { event: "*", schema: "public", table: "tasks" }, load)
     .on("postgres_changes", { event: "*", schema: "public", table: "categories" }, load)
+    .on("postgres_changes", { event: "*", schema: "public", table: "users" }, loadUsers)
     .subscribe();
+}
+
+async function heartbeat() {
+  // only report activity if the user actually interacted in the last 2 minutes
+  if (Date.now() - lastActivity > 120000) return;
+  await db.from("users").update({ last_seen: new Date().toISOString() }).eq("id", meUser.id);
+}
+
+async function loadUsers() {
+  const { data } = await db.from("users").select("*").order("name");
+  if (data) { teamUsers = data; renderTeam(); }
+}
+
+function renderTeam() {
+  if (!meUser) return;
+  $("team-list").innerHTML = teamUsers.map(u => {
+    const mins = u.last_seen ? (Date.now() - new Date(u.last_seen).getTime()) / 60000 : Infinity;
+    const st = mins <= 10 ? "on" : mins <= 30 ? "idle" : "off";
+    const label = mins <= 10 ? "Active" : mins <= 30 ? "Idle" : "Inactive";
+    return `<div class="team-row" title="${label}${u.title ? " · " + esc(u.title) : ""}">
+      <span class="status ${st}"></span>
+      <span class="who">${esc(u.name)}</span>
+      ${u.id === meUser.id ? `<span class="you">(you)</span>` : ""}
+    </div>`;
+  }).join("");
 }
 
 async function load() {
