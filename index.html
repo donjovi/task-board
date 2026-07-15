@@ -88,7 +88,15 @@
   .expander { font-size: 13px; color: var(--muted); min-width: 24px; }
   .expander:hover { color: var(--ink); }
   .thumbs { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
-  .thumb { width: 64px; height: 64px; object-fit: cover; border-radius: 6px; border: 1px solid var(--line); display: block; }
+  .thumb { width: 64px; height: 64px; object-fit: cover; border-radius: 6px; border: 1px solid var(--line); display: block; cursor: zoom-in; }
+  .lightbox {
+    position: fixed; inset: 0; background: rgba(15, 17, 21, 0.88);
+    display: flex; align-items: center; justify-content: center;
+    z-index: 100; padding: 30px; cursor: zoom-out;
+  }
+  .lightbox img { max-width: 92vw; max-height: 86vh; border-radius: 10px; box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5); }
+  .lightbox .lb-name { position: absolute; bottom: 16px; left: 0; right: 0; text-align: center; color: #fff; font-size: 13px; opacity: 0.85; }
+  .lightbox .lb-close { position: absolute; top: 14px; right: 20px; color: #fff; font-size: 26px; background: none; border: none; cursor: pointer; opacity: 0.8; }
   .filechip {
     display: inline-flex; align-items: center; gap: 4px; font-size: 12px; padding: 4px 8px;
     background: #f3f4f6; border-radius: 6px; color: var(--ink); text-decoration: none;
@@ -224,6 +232,13 @@
     <li>Open <code>index.html</code> and paste both into the <code>CONFIG</code> block at the bottom.</li>
     <li>Commit and push. Done — everyone with the link shares the same board.</li>
   </ol>
+</div>
+
+<!-- image lightbox -->
+<div class="lightbox hidden" id="lightbox" onclick="closeLightbox()">
+  <button class="lb-close" title="Close">✕</button>
+  <img id="lb-img" src="" alt="">
+  <div class="lb-name" id="lb-name"></div>
 </div>
 
 <!-- account modal -->
@@ -412,7 +427,7 @@ function render() {
         <div class="title">${esc(t.title)}</div>
         ${t.notes ? `<div class="notes">${esc(t.notes)}</div>` : ""}
         ${imgs.length ? `<div class="thumbs">${imgs.map(a =>
-          `<a href="${attUrl(a.path)}" target="_blank" title="${esc(a.name)}"><img class="thumb" src="${attUrl(a.path)}" alt="${esc(a.name)}"></a>`).join("")}</div>` : ""}
+          `<img class="thumb" src="${attUrl(a.path)}" alt="${esc(a.name)}" title="${esc(a.name)}" onclick="openLightbox(this.src, this.alt)">`).join("")}</div>` : ""}
         <div class="meta">
           ${c ? `<span class="chip" style="background:${esc(c.color)}">${esc(c.name)}</span>` : ""}
           <span class="pri ${t.priority}">${t.priority.toUpperCase()}</span>
@@ -434,7 +449,9 @@ function render() {
             <button onclick="addSub('${t.id}')">Add</button>
           </div>
           ${taskAtts.map(a => `<div class="sub-row">
-            <a class="filechip" href="${attUrl(a.path)}" target="_blank">${a.mime && a.mime.startsWith("image/") ? "🖼" : "📎"} ${esc(a.name)}</a>
+            ${a.mime && a.mime.startsWith("image/")
+              ? `<a class="filechip" href="#" data-url="${attUrl(a.path)}" data-name="${esc(a.name)}" onclick="openLightbox(this.dataset.url, this.dataset.name); return false;">🖼 ${esc(a.name)}</a>`
+              : `<a class="filechip" href="${attUrl(a.path)}" target="_blank">📎 ${esc(a.name)}</a>`}
             <button class="ghost" onclick="delAtt('${a.id}', '${a.path}')" title="Remove attachment">×</button>
           </div>`).join("")}
           <label class="attach-btn">📎 Attach file or image<input type="file" hidden onchange="uploadAtt('${t.id}', this)"></label>
@@ -446,6 +463,17 @@ function render() {
   }).join("");
   wireDrag();
 }
+
+window.openLightbox = (url, name) => {
+  $("lb-img").src = url;
+  $("lb-name").textContent = name || "";
+  $("lightbox").classList.remove("hidden");
+};
+window.closeLightbox = () => {
+  $("lightbox").classList.add("hidden");
+  $("lb-img").src = "";
+};
+addEventListener("keydown", (e) => { if (e.key === "Escape") closeLightbox(); });
 
 window.toggleExpand = (id) => {
   expanded.has(id) ? expanded.delete(id) : expanded.add(id);
