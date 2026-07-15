@@ -157,27 +157,53 @@
   .me .udot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; vertical-align: middle; }
   .team-panel {
     position: fixed; top: 64px; right: 16px; width: 190px;
-    background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 12px 14px;
+    background: #d4d0c8; border: 2px outset #fff; border-radius: 0;
+    padding: 0 0 8px; box-shadow: 2px 2px 8px rgba(0, 0, 0, 0.3); overflow: hidden;
   }
-  .tp-title { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); margin-bottom: 8px; }
-  .team-row { display: flex; align-items: center; gap: 8px; padding: 5px 6px; font-size: 13px; cursor: pointer; border-radius: 6px; }
-  .team-row:hover { background: #f4f5f7; }
-  .team-row .badge { background: var(--red); color: #fff; border-radius: 999px; font-size: 10px; font-weight: 700; padding: 1px 6px; margin-left: auto; }
+  .tp-title {
+    background: linear-gradient(90deg, #0a246a, #3a6ea5, #a6caf0);
+    color: #fff; font-size: 11px; font-weight: 700; padding: 4px 8px; margin-bottom: 6px;
+    font-family: Tahoma, Verdana, Arial, sans-serif; text-transform: none; letter-spacing: 0;
+  }
+  .team-row { display: flex; align-items: center; gap: 8px; padding: 3px 8px; font-size: 12px; cursor: pointer; border-radius: 0; margin: 0 4px; font-family: Tahoma, Verdana, Arial, sans-serif; }
+  .team-row:hover { background: #0a246a; color: #fff; }
+  .team-row:hover .you { color: #cfe0f5; }
+  .team-row .badge { background: #d40000; color: #fff; border-radius: 999px; font-size: 10px; font-weight: 700; padding: 1px 6px; margin-left: auto; }
   .chat {
-    position: fixed; bottom: 16px; right: 16px; width: 300px; height: 400px;
-    background: var(--card); border: 1px solid var(--line); border-radius: 12px;
-    display: flex; flex-direction: column; box-shadow: 0 10px 34px rgba(0, 0, 0, 0.2); z-index: 60;
+    position: fixed; bottom: 16px; right: 16px; width: 320px; height: 400px;
+    background: #d4d0c8; border: 2px outset #fff; border-radius: 0;
+    display: flex; flex-direction: column; box-shadow: 3px 3px 12px rgba(0, 0, 0, 0.35); z-index: 60;
+    font-family: Tahoma, Verdana, Arial, sans-serif;
   }
-  .chat-head { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-bottom: 1px solid var(--line); }
-  .chat-head b { flex: 1; font-size: 14px; }
-  .chat-msgs { flex: 1; overflow-y: auto; padding: 10px; display: flex; flex-direction: column; gap: 6px; }
-  .msg { max-width: 82%; padding: 7px 10px; border-radius: 10px; font-size: 13px; overflow-wrap: break-word; }
-  .msg.mine { align-self: flex-end; background: var(--accent); color: #fff; }
-  .msg.theirs { align-self: flex-start; background: #f3f4f6; }
-  .msg .t { display: block; font-size: 10px; opacity: 0.65; margin-top: 2px; }
-  .chat-input { display: flex; gap: 6px; padding: 8px; border-top: 1px solid var(--line); }
-  .chat-input input { font-size: 13px; }
-  .chat-input button { white-space: nowrap; }
+  .chat-head {
+    display: flex; align-items: center; gap: 8px; padding: 4px 6px;
+    background: linear-gradient(90deg, #0a246a, #3a6ea5, #a6caf0); color: #fff;
+  }
+  .chat-head b { flex: 1; font-size: 12px; font-weight: 700; }
+  .chat-head .ghost {
+    background: #d4d0c8; color: #000; border: 2px outset #fff; border-radius: 0;
+    width: 18px; height: 18px; padding: 0; font-size: 10px; line-height: 1;
+  }
+  .chat-head .ghost:hover { color: #000; }
+  .chat-head .ghost:active { border-style: inset; }
+  .chat-msgs {
+    flex: 1; overflow-y: auto; padding: 6px; margin: 6px;
+    background: #fff; border: 2px inset #808080;
+    display: block; font-family: Arial, Helvetica, sans-serif; font-size: 13px;
+  }
+  .msg { max-width: none; padding: 1px 2px; border-radius: 0; overflow-wrap: break-word; color: #000; }
+  .msg.mine, .msg.theirs { align-self: auto; background: none; color: #000; }
+  .msg .sn { font-weight: 700; }
+  .msg.mine .sn { color: #d40000; }
+  .msg.theirs .sn { color: #0000cc; }
+  .msg .t { display: inline; font-size: 10px; color: #999; margin-left: 6px; }
+  .chat-input { display: flex; gap: 6px; padding: 0 6px 6px; border-top: none; }
+  .chat-input input { font-size: 13px; border: 2px inset #808080; border-radius: 0; font-family: Arial, Helvetica, sans-serif; background: #fff; }
+  .chat-input button {
+    white-space: nowrap; background: #d4d0c8; border: 2px outset #fff; border-radius: 0;
+    color: #000; font-weight: 700; font-size: 12px; font-family: Tahoma, Verdana, Arial, sans-serif;
+  }
+  .chat-input button:active { border-style: inset; }
   .team-row .status { width: 9px; height: 9px; min-width: 9px; border-radius: 50%; }
   .status.on { background: #16a34a; }
   .status.idle { background: #eab308; }
@@ -204,7 +230,7 @@
 
 <main id="app" class="hidden">
   <aside class="team-panel" id="team-panel">
-    <div class="tp-title">Team</div>
+    <div class="tp-title">Buddy List</div>
     <div id="team-list"></div>
   </aside>
   <div class="tabs" id="tabs"></div>
@@ -317,16 +343,31 @@ let db, meUser = null, cats = [], tasks = [], subtasks = [], atts = [], shownTas
 const expanded = new Set();
 let msgsLoadedOnce = false;
 
-function beep() {
+/* ---------- retro IM sound effects (synthesized, era-inspired) ---------- */
+let _actx;
+function actx() { return _actx || (_actx = new (window.AudioContext || window.webkitAudioContext)()); }
+function tone(freq, dur, opts = {}) {
   try {
-    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const ctx = actx();
+    const t0 = ctx.currentTime + (opts.delay || 0);
     const o = ctx.createOscillator(), g = ctx.createGain();
+    o.type = opts.type || "sine";
+    o.frequency.setValueAtTime(freq, t0);
+    if (opts.slideTo) o.frequency.exponentialRampToValueAtTime(opts.slideTo, t0 + dur);
+    g.gain.setValueAtTime(opts.vol || 0.07, t0);
+    g.gain.exponentialRampToValueAtTime(0.001, t0 + dur);
     o.connect(g); g.connect(ctx.destination);
-    o.frequency.value = 880; g.gain.value = 0.06;
-    o.start(); o.frequency.setValueAtTime(660, ctx.currentTime + 0.08);
-    o.stop(ctx.currentTime + 0.16);
+    o.start(t0); o.stop(t0 + dur + 0.02);
   } catch (e) {}
 }
+// incoming IM: bright double-blip
+function sndMessage() { tone(1050, 0.10, { type: "square", vol: 0.04 }); tone(1400, 0.14, { type: "square", vol: 0.04, delay: 0.09 }); }
+// outgoing IM: single lower blip
+function sndSent() { tone(620, 0.09, { type: "square", vol: 0.035 }); }
+// buddy signs on: creaky rising "door open"
+function sndDoorOpen() { tone(110, 0.35, { type: "sawtooth", vol: 0.05, slideTo: 260 }); tone(55, 0.30, { type: "triangle", vol: 0.05, slideTo: 110 }); }
+// buddy signs off: falling slide + low thud "door close"
+function sndDoorClose() { tone(260, 0.28, { type: "sawtooth", vol: 0.05, slideTo: 90 }); tone(75, 0.12, { type: "square", vol: 0.07, delay: 0.26 }); }
 let lastActivity = Date.now();
 ["mousemove", "keydown", "click", "touchstart", "scroll"].forEach(ev =>
   addEventListener(ev, () => { lastActivity = Date.now(); }, { passive: true }));
@@ -411,8 +452,25 @@ function userStatus(u) {
   return mins <= 10 ? "on" : mins <= 30 ? "idle" : "off";
 }
 
+const prevStatus = {};
+let statusInit = false;
+
 function renderTeam() {
   if (!meUser) return;
+  // door sounds on buddy sign-on / sign-off
+  if (statusInit) {
+    for (const u of teamUsers) {
+      if (u.id === meUser.id) continue;
+      const st = userStatus(u);
+      const prev = prevStatus[u.id];
+      if (prev && prev !== st) {
+        if (st === "on") sndDoorOpen();
+        else if (prev === "on" && st === "off") sndDoorClose();
+      }
+    }
+  }
+  teamUsers.forEach(u => { prevStatus[u.id] = userStatus(u); });
+  statusInit = true;
   $("team-list").innerHTML = teamUsers.map(u => {
     const st = userStatus(u);
     const label = st === "on" ? "Active" : st === "idle" ? "Idle" : "Inactive";
@@ -441,11 +499,12 @@ async function loadMsgs() {
   msgsLoadedOnce = true;
   if (incoming.length) {
     const lastFrom = incoming[incoming.length - 1].from_user;
+    sndMessage();
     if (chatWith && incoming.some(m => m.from_user === chatWith.id)) {
       markRead(chatWith.id);
-    } else {
-      beep();
-      if (!chatWith) { openChat(lastFrom); return; }
+    } else if (!chatWith) {
+      openChat(lastFrom);
+      return;
     }
   }
   renderChat();
@@ -482,10 +541,11 @@ function renderChat() {
     (m.from_user === chatWith.id && m.to_user === meUser.id));
   const box = $("chat-msgs");
   box.innerHTML = thread.length
-    ? thread.map(m => `<div class="msg ${m.from_user === meUser.id ? "mine" : "theirs"}">${esc(m.body)}
-        <span class="t">${new Date(m.created_at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}</span>
-      </div>`).join("")
-    : `<div class="msg theirs">Say hi to ${esc(chatWith.name)} 👋</div>`;
+    ? thread.map(m => {
+        const mine = m.from_user === meUser.id;
+        return `<div class="msg ${mine ? "mine" : "theirs"}"><span class="sn">${esc(mine ? meUser.name : chatWith.name)}:</span> ${esc(m.body)}<span class="t">${new Date(m.created_at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}</span></div>`;
+      }).join("")
+    : `<div class="msg theirs"><span class="sn">${esc(chatWith.name)}</span> is online. Say hi.</div>`;
   box.scrollTop = box.scrollHeight;
 }
 
@@ -494,6 +554,7 @@ window.sendMsg = async () => {
   const body = inp.value.trim();
   if (!body || !chatWith) return;
   inp.value = "";
+  sndSent();
   await db.from("messages").insert({ from_user: meUser.id, to_user: chatWith.id, body });
   loadMsgs();
 };
