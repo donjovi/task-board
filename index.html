@@ -332,6 +332,13 @@ async function addTask() {
   load();
 }
 
+document.querySelectorAll(".filters button").forEach(b => {
+  b.onclick = () => {
+    filter = b.dataset.f;
+    document.querySelectorAll(".filters button").forEach(x => x.classList.toggle("on", x === b));
+    render();
+  };
+});
 $("btn-add").onclick = addTask;
 $("new-title").addEventListener("keydown", e => { if (e.key === "Enter") addTask(); });
 $("cat-save").onclick = async () => {
