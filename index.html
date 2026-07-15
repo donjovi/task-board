@@ -85,6 +85,25 @@
   .task.dragging { opacity: 0.35; }
   .task.drop-above { box-shadow: 0 -3px 0 0 var(--accent); }
   .task.drop-below { box-shadow: 0 3px 0 0 var(--accent); }
+  .expander { font-size: 13px; color: var(--muted); min-width: 24px; }
+  .expander:hover { color: var(--ink); }
+  .thumbs { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+  .thumb { width: 64px; height: 64px; object-fit: cover; border-radius: 6px; border: 1px solid var(--line); display: block; }
+  .filechip {
+    display: inline-flex; align-items: center; gap: 4px; font-size: 12px; padding: 4px 8px;
+    background: #f3f4f6; border-radius: 6px; color: var(--ink); text-decoration: none;
+    max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .subs { margin-top: 10px; border-top: 1px dashed var(--line); padding-top: 10px; display: grid; gap: 6px; }
+  .sub-row { display: flex; align-items: center; gap: 8px; font-size: 14px; }
+  .sub-row .check { width: 18px; height: 18px; min-width: 18px; font-size: 11px; margin-top: 0; }
+  .check.subdone { background: var(--green); border-color: var(--green); color: #fff; }
+  .sub-done { text-decoration: line-through; color: var(--muted); }
+  .sub-row .grow { flex: 1; min-width: 0; overflow-wrap: break-word; }
+  .sub-add { display: flex; gap: 6px; }
+  .sub-add input { padding: 6px 8px; font-size: 13px; }
+  .attach-btn { font-size: 12px; color: var(--muted); cursor: pointer; border: 1px dashed var(--line); border-radius: 6px; padding: 5px 10px; display: inline-block; width: fit-content; }
+  .attach-btn:hover { color: var(--ink); border-color: var(--ink); }
   .task.done .title { text-decoration: line-through; }
   .check {
     width: 22px; height: 22px; min-width: 22px; border-radius: 50%; border: 2px solid var(--line);
@@ -247,7 +266,8 @@ const CONFIG = {
 const COLORS = ["#2563eb","#16a34a","#d97706","#dc2626","#7c3aed","#0891b2","#db2777","#4b5563"];
 const $ = (id) => document.getElementById(id);
 
-let db, meUser = null, cats = [], tasks = [], shownTasks = [], teamUsers = [], activeCat = "all", filter = "open", selColor = COLORS[0], acctColor = COLORS[0];
+let db, meUser = null, cats = [], tasks = [], subtasks = [], atts = [], shownTasks = [], teamUsers = [], activeCat = "all", filter = "open", selColor = COLORS[0], acctColor = COLORS[0];
+const expanded = new Set();
 let lastActivity = Date.now();
 ["mousemove", "keydown", "click", "touchstart", "scroll"].forEach(ev =>
   addEventListener(ev, () => { lastActivity = Date.now(); }, { passive: true }));
@@ -309,6 +329,8 @@ function start() {
     .on("postgres_changes", { event: "*", schema: "public", table: "tasks" }, load)
     .on("postgres_changes", { event: "*", schema: "public", table: "categories" }, load)
     .on("postgres_changes", { event: "*", schema: "public", table: "users" }, loadUsers)
+    .on("postgres_changes", { event: "*", schema: "public", table: "subtasks" }, load)
+    .on("postgres_changes", { event: "*", schema: "public", table: "attachments" }, load)
     .subscribe();
 }
 
@@ -338,14 +360,19 @@ function renderTeam() {
 }
 
 async function load() {
-  const [c, t] = await Promise.all([
+  const [c, t, s, a] = await Promise.all([
     db.from("categories").select("*").order("name"),
     db.from("tasks").select("*").order("done").order("sort_order", { ascending: true, nullsFirst: false }).order("created_at", { ascending: false }),
+    db.from("subtasks").select("*").order("created_at"),
+    db.from("attachments").select("*").order("created_at"),
   ]);
   if (c.error || t.error) { alert("Database error: " + (c.error || t.error).message); return; }
   cats = c.data; tasks = t.data;
+  subtasks = s.data || []; atts = a.data || [];
   render();
 }
+
+const attUrl = (path) => db.storage.from("attachments").getPublicUrl(path).data.publicUrl;
 
 function render() {
   // tabs
@@ -374,25 +401,87 @@ function render() {
   $("list").innerHTML = shown.map(t => {
     const c = cats.find(x => x.id === t.category_id);
     const overdue = t.due_date && !t.done && t.due_date < today;
+    const subs = subtasks.filter(s => s.task_id === t.id);
+    const taskAtts = atts.filter(a => a.task_id === t.id);
+    const imgs = taskAtts.filter(a => a.mime && a.mime.startsWith("image/"));
+    const isOpen = expanded.has(t.id);
     return `<div class="task ${t.done ? "done" : ""}" data-id="${t.id}">
       <span class="handle" title="Drag to reorder">⠿</span>
       <button class="check" onclick="toggle('${t.id}', ${!t.done})" title="${t.done ? "Reopen" : "Complete"}">✓</button>
       <div class="body">
         <div class="title">${esc(t.title)}</div>
         ${t.notes ? `<div class="notes">${esc(t.notes)}</div>` : ""}
+        ${imgs.length ? `<div class="thumbs">${imgs.map(a =>
+          `<a href="${attUrl(a.path)}" target="_blank" title="${esc(a.name)}"><img class="thumb" src="${attUrl(a.path)}" alt="${esc(a.name)}"></a>`).join("")}</div>` : ""}
         <div class="meta">
           ${c ? `<span class="chip" style="background:${esc(c.color)}">${esc(c.name)}</span>` : ""}
           <span class="pri ${t.priority}">${t.priority.toUpperCase()}</span>
           ${t.due_date ? `<span class="due ${overdue ? "overdue" : ""}">📅 ${t.due_date}${overdue ? " (overdue)" : ""}</span>` : ""}
+          ${subs.length ? `<span>☑ ${subs.filter(x => x.done).length}/${subs.length}</span>` : ""}
+          ${taskAtts.length ? `<span>📎 ${taskAtts.length}</span>` : ""}
           <span>added by ${esc(t.created_by)}</span>
           ${t.done && t.completed_by ? `<span>· done by ${esc(t.completed_by)}</span>` : ""}
         </div>
+        ${isOpen ? `<div class="subs">
+          ${subs.map(s => `<div class="sub-row">
+            <button class="check ${s.done ? "subdone" : ""}" onclick="toggleSub('${s.id}', ${!s.done})">✓</button>
+            <span class="grow ${s.done ? "sub-done" : ""}">${esc(s.title)}</span>
+            <button class="ghost" onclick="delSub('${s.id}')" title="Delete subtask">×</button>
+          </div>`).join("")}
+          <div class="sub-add">
+            <input id="sub-input-${t.id}" placeholder="Add a subtask… (press Enter)" maxlength="200"
+              onkeydown="if(event.key==='Enter')addSub('${t.id}')">
+            <button onclick="addSub('${t.id}')">Add</button>
+          </div>
+          ${taskAtts.map(a => `<div class="sub-row">
+            <a class="filechip" href="${attUrl(a.path)}" target="_blank">${a.mime && a.mime.startsWith("image/") ? "🖼" : "📎"} ${esc(a.name)}</a>
+            <button class="ghost" onclick="delAtt('${a.id}', '${a.path}')" title="Remove attachment">×</button>
+          </div>`).join("")}
+          <label class="attach-btn">📎 Attach file or image<input type="file" hidden onchange="uploadAtt('${t.id}', this)"></label>
+        </div>` : ""}
       </div>
+      <button class="ghost expander" onclick="toggleExpand('${t.id}')" title="Subtasks & attachments">${isOpen ? "▾" : "▸"}</button>
       <button class="ghost" onclick="delTask('${t.id}')" title="Delete">🗑</button>
     </div>`;
   }).join("");
   wireDrag();
 }
+
+window.toggleExpand = (id) => {
+  expanded.has(id) ? expanded.delete(id) : expanded.add(id);
+  render();
+};
+window.addSub = async (taskId) => {
+  const inp = $("sub-input-" + taskId);
+  const v = inp.value.trim();
+  if (!v) return;
+  await db.from("subtasks").insert({ task_id: taskId, title: v, created_by: meUser.name });
+  load();
+};
+window.toggleSub = async (id, done) => {
+  await db.from("subtasks").update({ done }).eq("id", id);
+  load();
+};
+window.delSub = async (id) => {
+  await db.from("subtasks").delete().eq("id", id);
+  load();
+};
+window.uploadAtt = async (taskId, input) => {
+  const file = input.files[0];
+  if (!file) return;
+  if (file.size > 10 * 1024 * 1024) { alert("Max file size is 10 MB."); return; }
+  const path = `${taskId}/${Date.now()}-${file.name.replace(/[^\w.\-]/g, "_")}`;
+  const { error } = await db.storage.from("attachments").upload(path, file);
+  if (error) { alert("Upload failed: " + error.message); return; }
+  await db.from("attachments").insert({ task_id: taskId, name: file.name, path, mime: file.type || null, created_by: meUser.name });
+  load();
+};
+window.delAtt = async (id, path) => {
+  if (!confirm("Remove this attachment?")) return;
+  await db.storage.from("attachments").remove([path]);
+  await db.from("attachments").delete().eq("id", id);
+  load();
+};
 
 function so(t) { return t.sort_order ?? new Date(t.created_at).getTime() / 1000; }
 
