@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Task Board</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  :root {
+    --bg: #f4f5f7;
+    --card: #ffffff;
+    --ink: #1d2129;
+    --muted: #6b7280;
+    --line: #e5e7eb;
+    --accent: #2563eb;
+    --green: #16a34a;
+    --red: #dc2626;
+    --amber: #d97706;
+    --radius: 10px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+    background: var(--bg); color: var(--ink); min-height: 100vh;
+  }
+  header {
+    background: var(--card); border-bottom: 1px solid var(--line);
+    padding: 14px 20px; display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+  }
+  header h1 { font-size: 18px; font-weight: 700; }
+  header .spacer { flex: 1; }
+  .me { font-size: 13px; color: var(--muted); }
+  .me b { color: var(--ink); }
+  .me button { margin-left: 8px; }
+  main { max-width: 900px; margin: 0 auto; padding: 20px; }
+
+  button {
+    font: inherit; cursor: pointer; border: 1px solid var(--line);
+    background: var(--card); color: var(--ink); border-radius: 8px; padding: 6px 12px;
+  }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+  button.ghost { border: none; background: none; color: var(--muted); padding: 4px 6px; }
+  button.ghost:hover { color: var(--red); }
+  input, select, textarea {
+    font: inherit; border: 1px solid var(--line); border-radius: 8px;
+    padding: 8px 10px; background: #fff; color: var(--ink); width: 100%;
+  }
+  input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+
+  /* category tabs */
+  .tabs { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; align-items: center; }
+  .tab {
+    padding: 6px 14px; border-radius: 999px; border: 1px solid var(--line);
+    background: var(--card); font-size: 13px; font-weight: 600; cursor: pointer;
+    display: flex; align-items: center; gap: 7px;
+  }
+  .tab .dot { width: 9px; height: 9px; border-radius: 50%; }
+  .tab.active { border-color: var(--ink); box-shadow: 0 0 0 1px var(--ink); }
+  .tab .del { color: var(--muted); font-weight: 400; margin-left: 2px; }
+  .tab .del:hover { color: var(--red); }
+
+  /* add task card */
+  .add-card {
+    background: var(--card); border: 1px solid var(--line); border-radius: var(--radius);
+    padding: 14px; margin-bottom: 20px; display: grid; gap: 10px;
+  }
+  .add-card .row { display: grid; grid-template-columns: 1fr; gap: 10px; }
+  @media (min-width: 640px) {
+    .add-card .row.opts { grid-template-columns: 1fr 1fr 1fr auto; align-items: center; }
+  }
+
+  /* filters */
+  .filters { display: flex; gap: 6px; margin-bottom: 12px; font-size: 13px; }
+  .filters button { border-radius: 999px; padding: 4px 12px; font-size: 13px; }
+  .filters button.on { background: var(--ink); color: #fff; border-color: var(--ink); }
+
+  /* task list */
+  .task {
+    background: var(--card); border: 1px solid var(--line); border-radius: var(--radius);
+    padding: 12px 14px; margin-bottom: 8px; display: flex; gap: 12px; align-items: flex-start;
+  }
+  .task.done { opacity: 0.55; }
+  .task.done .title { text-decoration: line-through; }
+  .check {
+    width: 22px; height: 22px; min-width: 22px; border-radius: 50%; border: 2px solid var(--line);
+    background: none; cursor: pointer; margin-top: 2px; padding: 0;
+    display: flex; align-items: center; justify-content: center; font-size: 13px; color: transparent;
+  }
+  .check:hover { border-color: var(--green); color: var(--green); }
+  .task.done .check { background: var(--green); border-color: var(--green); color: #fff; }
+  .task .body { flex: 1; min-width: 0; }
+  .task .title { font-weight: 600; font-size: 15px; overflow-wrap: break-word; }
+  .task .notes { font-size: 13px; color: var(--muted); margin-top: 3px; white-space: pre-wrap; overflow-wrap: break-word; }
+  .task .meta { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 7px; font-size: 12px; color: var(--muted); align-items: center; }
+  .chip { padding: 2px 9px; border-radius: 999px; font-weight: 600; font-size: 11px; color: #fff; }
+  .pri { font-weight: 700; font-size: 11px; padding: 2px 8px; border-radius: 5px; }
+  .pri.low    { background: #eef2ff; color: #4f46e5; }
+  .pri.normal { background: #f3f4f6; color: #4b5563; }
+  .pri.high   { background: #fef3c7; color: var(--amber); }
+  .pri.urgent { background: #fee2e2; color: var(--red); }
+  .due.overdue { color: var(--red); font-weight: 700; }
+  .empty { text-align: center; color: var(--muted); padding: 40px 0; font-size: 14px; }
+
+  /* modals */
+  .overlay {
+    position: fixed; inset: 0; background: rgba(15,17,21,0.55);
+    display: flex; align-items: center; justify-content: center; z-index: 50; padding: 20px;
+  }
+  .modal {
+    background: var(--card); border-radius: 14px; padding: 24px; width: 100%; max-width: 380px;
+    display: grid; gap: 12px;
+  }
+  .modal h2 { font-size: 17px; }
+  .modal p { font-size: 13px; color: var(--muted); }
+  .hidden { display: none !important; }
+  .color-row { display: flex; gap: 8px; }
+  .swatch { width: 26px; height: 26px; border-radius: 50%; cursor: pointer; border: 2px solid transparent; }
+  .swatch.sel { border-color: var(--ink); }
+  .setup { max-width: 620px; margin: 60px auto; background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 28px; }
+  .setup h2 { margin-bottom: 12px; }
+  .setup ol { margin: 12px 0 0 20px; line-height: 1.7; font-size: 14px; }
+  .setup code { background: #f3f4f6; padding: 1px 6px; border-radius: 4px; font-size: 13px; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>📋 Task Board</h1>
+  <div class="spacer"></div>
+  <div class="me hidden" id="me">Working as <b id="me-name"></b><button id="btn-switch">Switch</button></div>
+</header>
+
+<main id="app" class="hidden">
+  <div class="tabs" id="tabs"></div>
+
+  <div class="add-card">
+    <div class="row">
+      <input id="new-title" placeholder="Add a task… (press Enter)" maxlength="200">
+    </div>
+    <div class="row">
+      <textarea id="new-notes" placeholder="Notes (optional)" rows="1"></textarea>
+    </div>
+    <div class="row opts">
+      <select id="new-cat"></select>
+      <select id="new-pri">
+        <option value="low">Low</option>
+        <option value="normal" selected>Normal</option>
+        <option value="high">High</option>
+        <option value="urgent">Urgent</option>
+      </select>
+      <input type="date" id="new-due">
+      <button class="primary" id="btn-add">Add task</button>
+    </div>
+  </div>
+
+  <div class="filters">
+    <button data-f="open" class="on">Open</button>
+    <button data-f="done">Completed</button>
+    <button data-f="all">All</button>
+  </div>
+
+  <div id="list"></div>
+</main>
+
+<!-- setup instructions shown when not configured -->
+<div id="setup" class="setup hidden">
+  <h2>One-time setup</h2>
+  <p>This board needs a free Supabase project as its shared database.</p>
+  <ol>
+    <li>Go to <b>supabase.com</b> → create a free account and a new project.</li>
+    <li>In the project: <b>SQL Editor</b> → paste and run the SQL from <code>README.md</code>.</li>
+    <li><b>Settings → API</b>: copy the <b>Project URL</b> and <b>anon public</b> key.</li>
+    <li>Open <code>index.html</code> and paste both into the <code>CONFIG</code> block at the bottom.</li>
+    <li>Commit and push. Done — everyone with the link shares the same board.</li>
+  </ol>
+</div>
+
+<!-- name modal -->
+<div class="overlay hidden" id="name-modal">
+  <div class="modal">
+    <h2>Who are you?</h2>
+    <p>Your name is shown on tasks you add and complete.</p>
+    <input id="name-input" placeholder="e.g. Don" maxlength="30">
+    <button class="primary" id="name-save">Start</button>
+  </div>
+</div>
+
+<!-- new category modal -->
+<div class="overlay hidden" id="cat-modal">
+  <div class="modal">
+    <h2>New category</h2>
+    <input id="cat-name" placeholder="Category name" maxlength="40">
+    <div class="color-row" id="cat-colors"></div>
+    <button class="primary" id="cat-save">Create</button>
+    <button id="cat-cancel">Cancel</button>
+  </div>
+</div>
+
+<script>
+/* ============================================================
+   CONFIG — paste your Supabase values here (Settings → API)
+   ============================================================ */
+const CONFIG = {
+  SUPABASE_URL: "https://hwgjmsmzoicfsmookadh.supabase.co",
+  SUPABASE_ANON_KEY: "sb_publishable_vP4R3fZFvaWXo1VK0tX93A_uHlKsRQs",
+};
+/* ============================================================ */
+
+const COLORS = ["#2563eb","#16a34a","#d97706","#dc2626","#7c3aed","#0891b2","#db2777","#4b5563"];
+const $ = (id) => document.getElementById(id);
+
+let db, me, cats = [], tasks = [], activeCat = "all", filter = "open", selColor = COLORS[0];
+
+function esc(s) { return (s || "").replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c])); }
+
+function init() {
+  if (!CONFIG.SUPABASE_URL || !CONFIG.SUPABASE_ANON_KEY) { $("setup").classList.remove("hidden"); return; }
+  db = supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY);
+  me = localStorage.getItem("tb_name");
+  if (!me) { $("name-modal").classList.remove("hidden"); $("name-input").focus(); }
+  else start();
+}
+
+function start() {
+  $("app").classList.remove("hidden");
+  $("me").classList.remove("hidden");
+  $("me-name").textContent = me;
+  load();
+  // realtime: refresh on any change
+  db.channel("board")
+    .on("postgres_changes", { event: "*", schema: "public", table: "tasks" }, load)
+    .on("postgres_changes", { event: "*", schema: "public", table: "categories" }, load)
+    .subscribe();
+}
+
+async function load() {
+  const [c, t] = await Promise.all([
+    db.from("categories").select("*").order("name"),
+    db.from("tasks").select("*").order("done").order("created_at", { ascending: false }),
+  ]);
+  if (c.error || t.error) { alert("Database error: " + (c.error || t.error).message); return; }
+  cats = c.data; tasks = t.data;
+  render();
+}
+
+function render() {
+  // tabs
+  let h = `<div class="tab ${activeCat === "all" ? "active" : ""}" onclick="setCat('all')">All</div>`;
+  for (const c of cats) {
+    h += `<div class="tab ${activeCat === c.id ? "active" : ""}" onclick="setCat('${c.id}')">
+      <span class="dot" style="background:${esc(c.color)}"></span>${esc(c.name)}
+      <span class="del" onclick="event.stopPropagation(); delCat('${c.id}')" title="Delete category">×</span>
+    </div>`;
+  }
+  h += `<div class="tab" onclick="openCatModal()">＋ Category</div>`;
+  $("tabs").innerHTML = h;
+
+  // category select in add form
+  $("new-cat").innerHTML = `<option value="">No category</option>` +
+    cats.map(c => `<option value="${c.id}" ${activeCat === c.id ? "selected" : ""}>${esc(c.name)}</option>`).join("");
+
+  // list
+  const today = new Date().toISOString().slice(0, 10);
+  const shown = tasks.filter(t =>
+    (activeCat === "all" || t.category_id === activeCat) &&
+    (filter === "all" || (filter === "done") === !!t.done)
+  );
+  if (!shown.length) { $("list").innerHTML = `<div class="empty">Nothing here. Add a task above.</div>`; return; }
+  $("list").innerHTML = shown.map(t => {
+    const c = cats.find(x => x.id === t.category_id);
+    const overdue = t.due_date && !t.done && t.due_date < today;
+    return `<div class="task ${t.done ? "done" : ""}">
+      <button class="check" onclick="toggle('${t.id}', ${!t.done})" title="${t.done ? "Reopen" : "Complete"}">✓</button>
+      <div class="body">
+        <div class="title">${esc(t.title)}</div>
+        ${t.notes ? `<div class="notes">${esc(t.notes)}</div>` : ""}
+        <div class="meta">
+          ${c ? `<span class="chip" style="background:${esc(c.color)}">${esc(c.name)}</span>` : ""}
+          <span class="pri ${t.priority}">${t.priority.toUpperCase()}</span>
+          ${t.due_date ? `<span class="due ${overdue ? "overdue" : ""}">📅 ${t.due_date}${overdue ? " (overdue)" : ""}</span>` : ""}
+          <span>added by ${esc(t.created_by)}</span>
+          ${t.done && t.completed_by ? `<span>· done by ${esc(t.completed_by)}</span>` : ""}
+        </div>
+      </div>
+      <button class="ghost" onclick="delTask('${t.id}')" title="Delete">🗑</button>
+    </div>`;
+  }).join("");
+}
+
+window.setCat = (id) => { activeCat = id; render(); };
+window.toggle = async (id, done) => {
+  await db.from("tasks").update({
+    done, completed_by: done ? me : null, completed_at: done ? new Date().toISOString() : null,
+  }).eq("id", id);
+  load();
+};
+window.delTask = async (id) => {
+  if (!confirm("Delete this task?")) return;
+  await db.from("tasks").delete().eq("id", id);
+  load();
+};
+window.delCat = async (id) => {
+  if (!confirm("Delete this category? Its tasks are kept, just uncategorized.")) return;
+  await db.from("categories").delete().eq("id", id);
+  if (activeCat === id) activeCat = "all";
+  load();
+};
+window.openCatModal = () => {
+  $("cat-colors").innerHTML = COLORS.map(c =>
+    `<div class="swatch ${c === selColor ? "sel" : ""}" style="background:${c}" onclick="pickColor('${c}')"></div>`).join("");
+  $("cat-modal").classList.remove("hidden");
+  $("cat-name").value = ""; $("cat-name").focus();
+};
+window.pickColor = (c) => {
+  selColor = c;
+  document.querySelectorAll(".swatch").forEach(s => s.classList.toggle("sel", s.style.background && s.getAttribute("onclick").includes(c)));
+};
+
+async function addTask() {
+  const title = $("new-title").value.trim();
+  if (!title) return;
+  await db.from("tasks").insert({
+    title,
+    notes: $("new-notes").value.trim() || null,
+    category_id: $("new-cat").value || null,
+    priority: $("new-pri").value,
+    due_date: $("new-due").value || null,
+    created_by: me,
+  });
+  $("new-title").value = ""; $("new-notes").value = ""; $("new-due").value = "";
+  $("new-title").focus();
+  load();
+}
+
+$("btn-add").onclick = addTask;
+$("new-title").addEventListener("keydown", e => { if (e.key === "Enter") addTask(); });
+$("cat-save").onclick = async () => {
+  const name = $("cat-name").value.trim();
+  if (!name) return;
+  await db.from("categories").insert({ name, color: selColor });
+  $("cat-modal").classList.add("hidden");
+  load();
+};
+$("cat-cancel").onclick = () => $("cat-modal").classList.add("hidden");
+$("name-save").onclick = () => {
+  const n = $("name-input").value.trim();
+  if (!n) return;
+  me = n; localStorage.setItem("tb_name", n);
+  $("name-modal").classList.add("hidden");
+  start();
+};
+$("name-input")?.addEventListener("keydown", e => { if (e.key === "Enter") $("name-save").click(); });
+$("btn-switch").onclick = () => {
+  localStorage.removeItem("tb_name");
+  location.reload();
+};
+
+init();
+</script>
+</body>
+</html>
