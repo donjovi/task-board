@@ -116,6 +116,13 @@
   .color-row { display: flex; gap: 8px; }
   .swatch { width: 26px; height: 26px; border-radius: 50%; cursor: pointer; border: 2px solid transparent; }
   .swatch.sel { border-color: var(--ink); }
+  .user-list { display: grid; gap: 6px; max-height: 220px; overflow-y: auto; }
+  .user-row { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; cursor: pointer; }
+  .user-row:hover { border-color: var(--accent); }
+  .user-row .udot { width: 12px; height: 12px; min-width: 12px; border-radius: 50%; }
+  .user-row .sub { font-size: 12px; color: var(--muted); }
+  .modal .divider { border-top: 1px solid var(--line); margin: 4px 0; }
+  .me .udot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; vertical-align: middle; }
   .setup { max-width: 620px; margin: 60px auto; background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 28px; }
   .setup h2 { margin-bottom: 12px; }
   .setup ol { margin: 12px 0 0 20px; line-height: 1.7; font-size: 14px; }
@@ -127,7 +134,7 @@
 <header>
   <h1>📋 Task Board</h1>
   <div class="spacer"></div>
-  <div class="me hidden" id="me">Working as <b id="me-name"></b><button id="btn-switch">Switch</button></div>
+  <div class="me hidden" id="me"><span class="udot" id="me-dot"></span>Working as <b id="me-name"></b><button id="btn-switch">Switch</button></div>
 </header>
 
 <main id="app" class="hidden">
@@ -175,13 +182,19 @@
   </ol>
 </div>
 
-<!-- name modal -->
-<div class="overlay hidden" id="name-modal">
+<!-- account modal -->
+<div class="overlay hidden" id="account-modal">
   <div class="modal">
     <h2>Who are you?</h2>
-    <p>Your name is shown on tasks you add and complete.</p>
-    <input id="name-input" placeholder="e.g. Don" maxlength="30">
-    <button class="primary" id="name-save">Start</button>
+    <p>Pick your profile, or create one. Your name is shown on tasks you add and complete.</p>
+    <div class="user-list" id="user-list"></div>
+    <div class="divider"></div>
+    <p><b>New here?</b> Create your profile:</p>
+    <input id="acct-name" placeholder="Name (required)" maxlength="30">
+    <input id="acct-email" placeholder="Email (optional)" maxlength="80">
+    <input id="acct-title" placeholder="Role / title (optional)" maxlength="60">
+    <div class="color-row" id="acct-colors"></div>
+    <button class="primary" id="acct-create">Create profile</button>
   </div>
 </div>
 
@@ -209,22 +222,55 @@ const CONFIG = {
 const COLORS = ["#2563eb","#16a34a","#d97706","#dc2626","#7c3aed","#0891b2","#db2777","#4b5563"];
 const $ = (id) => document.getElementById(id);
 
-let db, me, cats = [], tasks = [], activeCat = "all", filter = "open", selColor = COLORS[0];
+let db, meUser = null, cats = [], tasks = [], activeCat = "all", filter = "open", selColor = COLORS[0], acctColor = COLORS[0];
 
 function esc(s) { return (s || "").replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c])); }
 
-function init() {
+async function init() {
   if (!CONFIG.SUPABASE_URL || !CONFIG.SUPABASE_ANON_KEY) { $("setup").classList.remove("hidden"); return; }
   db = supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY);
-  me = localStorage.getItem("tb_name");
-  if (!me) { $("name-modal").classList.remove("hidden"); $("name-input").focus(); }
-  else start();
+  const uid = localStorage.getItem("tb_user_id");
+  if (uid) {
+    const { data } = await db.from("users").select("*").eq("id", uid).maybeSingle();
+    if (data) { meUser = data; start(); return; }
+    localStorage.removeItem("tb_user_id");
+  }
+  showPicker();
 }
+
+async function showPicker() {
+  const { data, error } = await db.from("users").select("*").order("name");
+  if (error) { alert("Database error: " + error.message); return; }
+  $("user-list").innerHTML = (data && data.length)
+    ? data.map(u => `<div class="user-row" onclick="pickUser('${u.id}')">
+        <span class="udot" style="background:${esc(u.color || "#4b5563")}"></span>
+        <span><b>${esc(u.name)}</b>${u.title ? `<div class="sub">${esc(u.title)}</div>` : ""}</span>
+      </div>`).join("")
+    : `<div class="user-row" style="cursor:default; color:var(--muted); font-size:13px">No profiles yet — create the first one below.</div>`;
+  $("acct-colors").innerHTML = COLORS.map(c =>
+    `<div class="swatch ${c === acctColor ? "sel" : ""}" style="background:${c}" onclick="pickAcctColor('${c}')"></div>`).join("");
+  $("account-modal").classList.remove("hidden");
+}
+
+window.pickUser = async (id) => {
+  const { data } = await db.from("users").select("*").eq("id", id).maybeSingle();
+  if (!data) return;
+  meUser = data;
+  localStorage.setItem("tb_user_id", data.id);
+  $("account-modal").classList.add("hidden");
+  start();
+};
+
+window.pickAcctColor = (c) => {
+  acctColor = c;
+  document.querySelectorAll("#acct-colors .swatch").forEach(s => s.classList.toggle("sel", s.getAttribute("onclick").includes(c)));
+};
 
 function start() {
   $("app").classList.remove("hidden");
   $("me").classList.remove("hidden");
-  $("me-name").textContent = me;
+  $("me-name").textContent = meUser.name;
+  $("me-dot").style.background = meUser.color || "#4b5563";
   load();
   // realtime: refresh on any change
   db.channel("board")
@@ -290,7 +336,7 @@ function render() {
 window.setCat = (id) => { activeCat = id; render(); };
 window.toggle = async (id, done) => {
   await db.from("tasks").update({
-    done, completed_by: done ? me : null, completed_at: done ? new Date().toISOString() : null,
+    done, completed_by: done ? meUser.name : null, completed_at: done ? new Date().toISOString() : null,
   }).eq("id", id);
   load();
 };
@@ -313,7 +359,7 @@ window.openCatModal = () => {
 };
 window.pickColor = (c) => {
   selColor = c;
-  document.querySelectorAll(".swatch").forEach(s => s.classList.toggle("sel", s.style.background && s.getAttribute("onclick").includes(c)));
+  document.querySelectorAll("#cat-colors .swatch").forEach(s => s.classList.toggle("sel", s.getAttribute("onclick").includes(c)));
 };
 
 async function addTask() {
@@ -325,7 +371,7 @@ async function addTask() {
     category_id: $("new-cat").value || null,
     priority: $("new-pri").value,
     due_date: $("new-due").value || null,
-    created_by: me,
+    created_by: meUser.name,
   });
   $("new-title").value = ""; $("new-notes").value = ""; $("new-due").value = "";
   $("new-title").focus();
@@ -349,16 +395,24 @@ $("cat-save").onclick = async () => {
   load();
 };
 $("cat-cancel").onclick = () => $("cat-modal").classList.add("hidden");
-$("name-save").onclick = () => {
-  const n = $("name-input").value.trim();
-  if (!n) return;
-  me = n; localStorage.setItem("tb_name", n);
-  $("name-modal").classList.add("hidden");
+$("acct-create").onclick = async () => {
+  const name = $("acct-name").value.trim();
+  if (!name) return;
+  const { data, error } = await db.from("users").insert({
+    name,
+    email: $("acct-email").value.trim() || null,
+    title: $("acct-title").value.trim() || null,
+    color: acctColor,
+  }).select().single();
+  if (error) { alert("Could not create profile: " + error.message); return; }
+  meUser = data;
+  localStorage.setItem("tb_user_id", data.id);
+  $("account-modal").classList.add("hidden");
   start();
 };
-$("name-input")?.addEventListener("keydown", e => { if (e.key === "Enter") $("name-save").click(); });
+$("acct-name").addEventListener("keydown", e => { if (e.key === "Enter") $("acct-create").click(); });
 $("btn-switch").onclick = () => {
-  localStorage.removeItem("tb_name");
+  localStorage.removeItem("tb_user_id");
   location.reload();
 };
 
